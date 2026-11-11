@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f172a">
+<title>Résultats Sport</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --card2: #273449; --text: #f1f5f9;
+    --muted: #94a3b8; --accent: #38bdf8; --live: #ef4444; --win: #f8fafc;
+    --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10; background: var(--bg);
+    padding: 14px 14px 0; border-bottom: 1px solid var(--border);
+  }
+  h1 { margin: 0 0 12px; font-size: 20px; font-weight: 700; }
+  h1 span { color: var(--accent); }
+  .tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 0 0 auto; border: 1px solid var(--border); background: var(--card);
+    color: var(--muted); padding: 8px 14px; border-radius: 999px; font-size: 14px;
+    font-weight: 600; cursor: pointer;
+  }
+  .tab.active { background: var(--accent); color: #0f172a; border-color: var(--accent); }
+  .views { display: flex; gap: 0; margin: 0 -14px; }
+  .view {
+    flex: 1; background: none; border: none; color: var(--muted); padding: 10px;
+    font-size: 14px; font-weight: 600; border-bottom: 2px solid transparent; cursor: pointer;
+  }
+  .view.active { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 14px; max-width: 640px; margin: 0 auto; }
+  .datebar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  .datebar button {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 12px; font-size: 16px; cursor: pointer;
+  }
+  .datebar .label { text-align: center; flex: 1; }
+  .datebar .label b { display: block; font-size: 15px; }
+  .datebar .label b::first-letter { text-transform: uppercase; }
+  .datebar .label a { color: var(--accent); font-size: 13px; text-decoration: none; cursor: pointer; }
+  .match {
+    background: var(--card); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
+    display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center;
+  }
+  .team { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--muted); }
+  .team.winner, .team.even { color: var(--win); }
+  .team.winner { font-weight: 700; }
+  .team img { width: 24px; height: 24px; object-fit: contain; flex: 0 0 24px; }
+  .team .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .score { font-size: 18px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .meta { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 8px; margin-top: 2px; }
+  .live { color: var(--live); font-weight: 700; }
+  .live::before { content: "● "; animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .msg { text-align: center; color: var(--muted); padding: 40px 10px; line-height: 1.5; }
+  .msg button { margin-top: 12px; background: var(--accent); color: #0f172a; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--card); border-radius: 14px; overflow: hidden; margin-bottom: 16px; }
+  th, td { padding: 9px 6px; text-align: center; font-variant-numeric: tabular-nums; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; background: var(--card2); }
+  td.t { text-align: left; }
+  td.t div { display: flex; align-items: center; gap: 8px; }
+  td.t img { width: 20px; height: 20px; object-fit: contain; }
+  td.pts { font-weight: 700; }
+  tr + tr td { border-top: 1px solid var(--border); }
+  h2 { font-size: 15px; margin: 4px 0 8px; color: var(--muted); }
+  footer { text-align: center; color: var(--muted); font-size: 11px; padding: 10px 0 30px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Résultats <span>Sport</span></h1>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="views">
+    <button class="view active" data-view="matchs">Matchs</button>
+    <button class="view" data-view="classement">Classement</button>
+  </div>
+</header>
+<main id="main"></main>
+<footer>Données : ESPN · Heures de Paris</footer>
+
+<script>
+const LIGUES = [
+  { id: "ligue1", nom: "Ligue 1", chemin: "soccer/fra.1", sport: "foot" },
+  { id: "pl", nom: "Premier League", chemin: "soccer/eng.1", sport: "foot" },
+  { id: "liga", nom: "La Liga", chemin: "soccer/esp.1", sport: "foot" },
+  { id: "bundesliga", nom: "Bundesliga", chemin: "soccer/ger.1", sport: "foot" },
+  { id: "nba", nom: "NBA", chemin: "basketball/nba", sport: "basket" },
+];
+const API = "https://site.api.espn.com/apis";
+
+const etat = { ligue: lire("ligue") || "ligue1", vue: "matchs", date: new Date() };
+let minuterie = null;
+let jeton = 0; // évite d'afficher une ancienne réponse après un changement d'onglet
+
+function lire(cle) { try { return localStorage.getItem(cle); } catch (e) { return null; } }
+function ecrire(cle, val) { try { localStorage.setItem(cle, val); } catch (e) {} }
+function ligueActive() { return LIGUES.find(l => l.id === etat.ligue) || LIGUES[0]; }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+function jourCle(d) {
+  return d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+}
+function memeJour(a, b) { return jourCle(a) === jourCle(b); }
+const fmtJour = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Paris" });
+const fmtHeure = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
+const fmtCourt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", timeZone: "Europe/Paris" });
+const fmtParisCle = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Europe/Paris" });
+
+function construireOnglets() {
+  const nav = document.getElementById("tabs");
+  nav.innerHTML = LIGUES.map(l =>
+    `<button class="tab${l.id === etat.ligue ? " active" : ""}" data-ligue="${l.id}">${l.nom}</button>`).join("");
+  nav.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+    etat.ligue = b.dataset.ligue; ecrire("ligue", etat.ligue); construireOnglets(); afficher();
+  });
+  document.querySelectorAll(".view").forEach(b => {
+    b.classList.toggle("active", b.dataset.view === etat.vue);
+    b.onclick = () => { etat.vue = b.dataset.view; construireOnglets(); afficher(); };
+  });
+}
+
+function message(texte, reessayer) {
+  document.getElementById("main").innerHTML =
+    `<div class="msg">${texte}${reessayer ? '<br><button id="retry">Réessayer</button>' : ""}</div>`;
+  if (reessayer) document.getElementById("retry").onclick = afficher;
+}
+
+async function charger(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+function afficher() {
+  clearTimeout(minuterie);
+  jeton++;
+  if (etat.vue === "matchs") afficherMatchs(); else afficherClassement();
+}
+
+/* ---------- Matchs ---------- */
+function statut(ev, ligue) {
+  const s = ev.status || {}, t = s.type || {};
+  const nom = t.name || "";
+  if (nom === "STATUS_POSTPONED") return { texte: "Reporté" };
+  if (nom === "STATUS_CANCELED") return { texte: "Annulé" };
+  if (nom === "STATUS_HALFTIME") return { texte: "Mi-temps", direct: true };
+  if (t.state === "pre") {
+    const d = new Date(ev.date);
+    const joursDiff = fmtParisCle.format(d).replace(/-/g, "") !== jourCle(etat.date);
+    return { texte: (joursDiff ? fmtCourt.format(d) + " " : "") + fmtHeure.format(d) };
+  }
+  if (t.state === "in") {
+    if (ligue.sport === "basket") {
+      const p = s.period || 1;
+      const qt = p > 4 ? "Prol." : "QT" + p;
+      return { texte: `${qt} ${s.displayClock || ""}`.trim(), direct: true };
+    }
+    return { texte: s.displayClock || t.shortDetail || "En cours", direct: true };
+  }
+  if (t.state === "post") {
+    if (ligue.sport === "basket" && (s.period || 4) > 4) return { texte: "Terminé (prol.)" };
+    return { texte: "Terminé" };
+  }
+  return { texte: t.shortDetail || "" };
+}
+
+function ligneEquipe(c, fini, egalite) {
+  const e = c.team || {};
+  const cls = fini ? (c.winner ? " winner" : egalite ? " even" : "") : " even";
+  const logo = e.logo ? `<img src="${esc(e.logo)}" alt="" loading="lazy">` : "";
+  return `<div class="team${cls}">${logo}<span class="name">${esc(e.shortDisplayName || e.displayName)}</span></div>`;
+}
+
+async function afficherMatchs() {
+  const ligue = ligueActive();
+  const aujourdhui = memeJour(etat.date, new Date());
+  const barre = `<div class="datebar">
+      <button id="prev" aria-label="Jour précédent">‹</button>
+      <div class="label"><b>${fmtJour.format(etat.date)}</b>${aujourdhui ? "" : '<a id="today">Revenir à aujourd\'hui</a>'}</div>
+      <button id="next" aria-label="Jour suivant">›</button>
+    </div>`;
+  const main = document.getElementById("main");
+  main.innerHTML = barre + '<div id="liste"><div class="msg">Chargement…</div></div>';
+  document.getElementById("prev").onclick = () => { etat.date.setDate(etat.date.getDate() - 1); afficher(); };
+  document.getElementById("next").onclick = () => { etat.date.setDate(etat.date.getDate() + 1); afficher(); };
+  const t = document.getElementById("today");
+  if (t) t.onclick = () => { etat.date = new Date(); afficher(); };
+
+  const monJeton = jeton;
+  let data;
+  try {
+    data = await charger(`${API}/site/v2/sports/${ligue.chemin}/scoreboard?dates=${jourCle(etat.date)}`);
+  } catch (e) {
+    if (monJeton !== jeton) return;
+    document.getElementById("liste").innerHTML =
+      '<div class="msg">Impossible de charger les matchs.<br>Vérifie ta connexion internet.<br><button id="retry">Réessayer</button></div>';
+    document.getElementById("retry").onclick = afficher;
+    return;
+  }
+  if (monJeton !== jeton) return;
+
+  const evs = (data.events || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (!evs.length) {
+    document.getElementById("liste").innerHTML = `<div class="msg">Aucun match de ${esc(ligue.nom)} ce jour-là.</div>`;
+    return;
+  }
+  let enDirect = false;
+  document.getElementById("liste").innerHTML = evs.map(ev => {
+    const comp = (ev.competitions || [])[0] || {};
+    const cs = comp.competitors || [];
+    const dom = cs.find(c => c.homeAway === "home") || cs[0] || {};
+    const ext = cs.find(c => c.homeAway === "away") || cs[1] || {};
+    const st = statut(ev, ligue);
+    if (st.direct) enDirect = true;
+    const etatMatch = (ev.status && ev.status.type && ev.status.type.state) || "pre";
+    const fini = etatMatch === "post";
+    const egalite = fini && !dom.winner && !ext.winner;
+    const avecScore = etatMatch !== "pre";
+    // NBA : l'équipe à l'extérieur s'affiche en premier, comme aux États-Unis
+    const ordre = ligue.sport === "basket" ? [ext, dom] : [dom, ext];
+    const lieu = comp.venue && comp.venue.fullName ? esc(comp.venue.fullName) : "";
+    return `<div class="match">
+        ${ligneEquipe(ordre[0], fini, egalite)}<div class="score">${avecScore ? esc(ordre[0].score) : ""}</div>
+        ${ligneEquipe(ordre[1], fini, egalite)}<div class="score">${avecScore ? esc(ordre[1].score) : ""}</div>
+        <div class="meta"><span class="${st.direct ? "live" : ""}">${esc(st.texte)}</span><span>${lieu}</span></div>
+      </div>`;
+  }).join("");
+
+  // Mise à jour automatique toutes les 30 secondes pendant les matchs en direct
+  if (enDirect) minuterie = setTimeout(afficher, 30000);
+}
+
+/* ---------- Classement ---------- */
+function stat(entree, nom) {
+  const s = (entree.stats || []).find(x => x.name === nom);
+  return s ? s : null;
+}
+function val(entree, nom) { const s = stat(entree, nom); return s ? (s.displayValue ?? s.value) : "–"; }
+function num(entree, nom) { const s = stat(entree, nom); return s && typeof s.value === "number" ? s.value : 999; }
+
+function nomGroupe(n) {
+  return String(n || "").replace("Eastern Conference", "Conférence Est").replace("Western Conference", "Conférence Ouest");
+}
+
+async function afficherClassement() {
+  const ligue = ligueActive();
+  message("Chargement…");
+  const monJeton = jeton;
+  let data;
+  try {
+    data = await charger(`${API}/v2/sports/${ligue.chemin}/standings`);
+  } catch (e) {
+    if (monJeton !== jeton) return;
+    message("Impossible de charger le classement.<br>Vérifie ta connexion internet.", true);
+    return;
+  }
+  if (monJeton !== jeton) return;
+
+  const groupes = data.children && data.children.length ? data.children : [{ name: "", standings: data.standings }];
+  const html = groupes.map(g => {
+    const entrees = ((g.standings || {}).entries || []).slice();
+    if (!entrees.length) return "";
+    const lignes = (ligue.sport === "basket")
+      ? entrees.sort((a, b) => num(a, "playoffSeed") - num(b, "playoffSeed"))
+      : entrees.sort((a, b) => num(a, "rank") - num(b, "rank"));
+    const entete = ligue.sport === "basket"
+      ? "<tr><th>#</th><th style='text-align:left'>Équipe</th><th>V</th><th>D</th><th>%</th><th>Écart</th></tr>"
+      : "<tr><th>#</th><th style='text-align:left'>Équipe</th><th>J</th><th>Diff</th><th>Pts</th></tr>";
+    const corps = lignes.map((e, i) => {
+      const t = e.team || {};
+      const logo = (t.logos && t.logos[0] && t.logos[0].href) ? `<img src="${esc(t.logos[0].href)}" alt="" loading="lazy">` : "";
+      const equipe = `<td class="t"><div>${logo}<span>${esc(t.shortDisplayName || t.displayName)}</span></div></td>`;
+      return ligue.sport === "basket"
+        ? `<tr><td>${i + 1}</td>${equipe}<td>${esc(val(e, "wins"))}</td><td>${esc(val(e, "losses"))}</td><td>${esc(val(e, "winPercent"))}</td><td>${esc(val(e, "gamesBehind"))}</td></tr>`
+        : `<tr><td>${i + 1}</td>${equipe}<td>${esc(val(e, "gamesPlayed"))}</td><td>${esc(val(e, "pointDifferential"))}</td><td class="pts">${esc(val(e, "points"))}</td></tr>`;
+    }).join("");
+    return (g.name && groupes.length > 1 ? `<h2>${esc(nomGroupe(g.name))}</h2>` : "") + `<table>${entete}${corps}</table>`;
+  }).join("");
+  document.getElementById("main").innerHTML = html || '<div class="msg">Classement indisponible pour le moment.</div>';
+}
+
+construireOnglets();
+afficher();
+</script>
+</body>
+</html>
