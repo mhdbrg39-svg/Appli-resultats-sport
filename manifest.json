@@ -1,0 +1,16 @@
+{
+  "name": "Résultats Sport",
+  "short_name": "Résultats",
+  "description": "Résultats et classements : Ligue 1, Premier League, La Liga, Bundesliga, NBA",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
