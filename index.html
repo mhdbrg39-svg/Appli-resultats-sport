@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Résultats">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Résultats Sport</title>
 <style>
   :root {
@@ -27,13 +33,13 @@
   .tabs::-webkit-scrollbar { display: none; }
   .tab {
     flex: 0 0 auto; border: 1px solid var(--border); background: var(--card);
-    color: var(--muted); padding: 8px 14px; border-radius: 999px; font-size: 14px;
+    color: var(--muted); padding: 0 16px; min-height: 44px; border-radius: 999px; font-size: 14px;
     font-weight: 600; cursor: pointer;
   }
   .tab.active { background: var(--accent); color: #0f172a; border-color: var(--accent); }
   .views { display: flex; gap: 0; margin: 0 -14px; }
   .view {
-    flex: 1; background: none; border: none; color: var(--muted); padding: 10px;
+    flex: 1; background: none; border: none; color: var(--muted); padding: 10px; min-height: 44px;
     font-size: 14px; font-weight: 600; border-bottom: 2px solid transparent; cursor: pointer;
   }
   .view.active { color: var(--text); border-bottom-color: var(--accent); }
@@ -41,12 +47,15 @@
   .datebar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
   .datebar button {
     background: var(--card); color: var(--text); border: 1px solid var(--border);
-    border-radius: 10px; padding: 8px 12px; font-size: 16px; cursor: pointer;
+    border-radius: 10px; min-width: 44px; min-height: 44px; font-size: 18px; cursor: pointer;
   }
   .datebar .label { text-align: center; flex: 1; }
   .datebar .label b { display: block; font-size: 15px; }
   .datebar .label b::first-letter { text-transform: uppercase; }
-  .datebar .label a { color: var(--accent); font-size: 13px; text-decoration: none; cursor: pointer; }
+  .datebar .label button.lien {
+    background: none; border: none; min-height: 32px; padding: 4px 8px;
+    color: var(--accent); font-size: 13px;
+  }
   .match {
     background: var(--card); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
     display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center;
@@ -62,7 +71,7 @@
   .live::before { content: "● "; animation: blink 1.2s infinite; }
   @keyframes blink { 50% { opacity: .3; } }
   .msg { text-align: center; color: var(--muted); padding: 40px 10px; line-height: 1.5; }
-  .msg button { margin-top: 12px; background: var(--accent); color: #0f172a; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 700; }
+  .msg button { margin-top: 12px; background: var(--accent); color: #0f172a; border: none; border-radius: 10px; padding: 0 18px; min-height: 44px; font-size: 15px; font-weight: 700; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--card); border-radius: 14px; overflow: hidden; margin-bottom: 16px; }
   th, td { padding: 9px 6px; text-align: center; font-variant-numeric: tabular-nums; }
   th { color: var(--muted); font-weight: 600; font-size: 12px; background: var(--card2); }
@@ -131,7 +140,7 @@ function construireOnglets() {
 function message(texte, reessayer) {
   document.getElementById("main").innerHTML =
     `<div class="msg">${texte}${reessayer ? '<br><button id="retry">Réessayer</button>' : ""}</div>`;
-  if (reessayer) document.getElementById("retry").onclick = afficher;
+  if (reessayer) document.getElementById("retry").onclick = () => afficher();
 }
 
 async function charger(url) {
@@ -140,11 +149,32 @@ async function charger(url) {
   return r.json();
 }
 
-function afficher() {
+// silencieux = mise à jour en place : pas de « Chargement… », la page ne remonte pas
+function afficher(silencieux) {
   clearTimeout(minuterie);
+  minuterie = null;
   jeton++;
-  if (etat.vue === "matchs") afficherMatchs(); else afficherClassement();
+  if (etat.vue === "matchs") afficherMatchs(silencieux === true); else afficherClassement(silencieux === true);
 }
+
+function programmer(delai) {
+  clearTimeout(minuterie);
+  minuterie = setTimeout(() => { if (!document.hidden) afficher(true); }, delai);
+}
+
+// Appli en arrière-plan : on arrête les mises à jour. Au retour : mise à jour immédiate.
+let cacheeDepuis = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    clearTimeout(minuterie);
+    cacheeDepuis = Date.now();
+  } else if (cacheeDepuis) {
+    // Si on revient le lendemain, on repasse sur la date du jour
+    if (!memeJour(new Date(cacheeDepuis), new Date()) && memeJour(etat.date, new Date(cacheeDepuis))) etat.date = new Date();
+    cacheeDepuis = 0;
+    afficher(true);
+  }
+});
 
 /* ---------- Matchs ---------- */
 function statut(ev, ligue) {
@@ -180,20 +210,26 @@ function ligneEquipe(c, fini, egalite) {
   return `<div class="team${cls}">${logo}<span class="name">${esc(e.shortDisplayName || e.displayName)}</span></div>`;
 }
 
-async function afficherMatchs() {
+async function afficherMatchs(silencieux) {
   const ligue = ligueActive();
   const aujourdhui = memeJour(etat.date, new Date());
-  const barre = `<div class="datebar">
-      <button id="prev" aria-label="Jour précédent">‹</button>
-      <div class="label"><b>${fmtJour.format(etat.date)}</b>${aujourdhui ? "" : '<a id="today">Revenir à aujourd\'hui</a>'}</div>
-      <button id="next" aria-label="Jour suivant">›</button>
-    </div>`;
+  const cleAffichee = ligue.id + "|" + jourCle(etat.date);
   const main = document.getElementById("main");
-  main.innerHTML = barre + '<div id="liste"><div class="msg">Chargement…</div></div>';
-  document.getElementById("prev").onclick = () => { etat.date.setDate(etat.date.getDate() - 1); afficher(); };
-  document.getElementById("next").onclick = () => { etat.date.setDate(etat.date.getDate() + 1); afficher(); };
-  const t = document.getElementById("today");
-  if (t) t.onclick = () => { etat.date = new Date(); afficher(); };
+  // La mise à jour en place n'est possible que si la même page est déjà affichée
+  if (!silencieux || main.dataset.cle !== cleAffichee || !document.getElementById("liste")) {
+    const barre = `<div class="datebar">
+        <button id="prev" aria-label="Jour précédent">‹</button>
+        <div class="label"><b>${fmtJour.format(etat.date)}</b>${aujourdhui ? "" : '<button class="lien" id="today">Revenir à aujourd\'hui</button>'}</div>
+        <button id="next" aria-label="Jour suivant">›</button>
+      </div>`;
+    main.dataset.cle = cleAffichee;
+    main.innerHTML = barre + '<div id="liste"><div class="msg">Chargement…</div></div>';
+    document.getElementById("prev").onclick = () => { etat.date.setDate(etat.date.getDate() - 1); afficher(); };
+    document.getElementById("next").onclick = () => { etat.date.setDate(etat.date.getDate() + 1); afficher(); };
+    const t = document.getElementById("today");
+    if (t) t.onclick = () => { etat.date = new Date(); afficher(); };
+    silencieux = false;
+  }
 
   const monJeton = jeton;
   let data;
@@ -201,9 +237,11 @@ async function afficherMatchs() {
     data = await charger(`${API}/site/v2/sports/${ligue.chemin}/scoreboard?dates=${jourCle(etat.date)}`);
   } catch (e) {
     if (monJeton !== jeton) return;
+    // Échec d'une mise à jour automatique : on garde les scores affichés et on réessaie plus tard
+    if (silencieux) { programmer(30000); return; }
     document.getElementById("liste").innerHTML =
       '<div class="msg">Impossible de charger les matchs.<br>Vérifie ta connexion internet.<br><button id="retry">Réessayer</button></div>';
-    document.getElementById("retry").onclick = afficher;
+    document.getElementById("retry").onclick = () => afficher();
     return;
   }
   if (monJeton !== jeton) return;
@@ -214,6 +252,7 @@ async function afficherMatchs() {
     return;
   }
   let enDirect = false;
+  let prochainDebut = Infinity; // heure du prochain coup d'envoi (ms)
   document.getElementById("liste").innerHTML = evs.map(ev => {
     const comp = (ev.competitions || [])[0] || {};
     const cs = comp.competitors || [];
@@ -222,6 +261,11 @@ async function afficherMatchs() {
     const st = statut(ev, ligue);
     if (st.direct) enDirect = true;
     const etatMatch = (ev.status && ev.status.type && ev.status.type.state) || "pre";
+    if (etatMatch === "pre" && !st.direct) {
+      const nomStatut = (ev.status && ev.status.type && ev.status.type.name) || "";
+      const debut = new Date(ev.date).getTime();
+      if (nomStatut !== "STATUS_POSTPONED" && nomStatut !== "STATUS_CANCELED" && debut < prochainDebut) prochainDebut = debut;
+    }
     const fini = etatMatch === "post";
     const egalite = fini && !dom.winner && !ext.winner;
     const avecScore = etatMatch !== "pre";
@@ -235,8 +279,16 @@ async function afficherMatchs() {
       </div>`;
   }).join("");
 
-  // Mise à jour automatique toutes les 30 secondes pendant les matchs en direct
-  if (enDirect) minuterie = setTimeout(afficher, 30000);
+  // Mise à jour automatique :
+  // - toutes les 30 secondes pendant les matchs en direct ;
+  // - sinon, au prochain coup d'envoi (vérifié au moins toutes les 10 minutes),
+  //   s'il a lieu dans les prochaines 24 heures.
+  if (enDirect) {
+    programmer(30000);
+  } else if (prochainDebut !== Infinity) {
+    const attente = prochainDebut - Date.now();
+    if (attente < 24 * 3600e3) programmer(Math.min(Math.max(attente, 30000), 10 * 60000));
+  }
 }
 
 /* ---------- Classement ---------- */
@@ -251,15 +303,22 @@ function nomGroupe(n) {
   return String(n || "").replace("Eastern Conference", "Conférence Est").replace("Western Conference", "Conférence Ouest");
 }
 
-async function afficherClassement() {
+async function afficherClassement(silencieux) {
   const ligue = ligueActive();
-  message("Chargement…");
+  const main = document.getElementById("main");
+  const cleAffichee = ligue.id + "|classement";
+  if (!silencieux || main.dataset.cle !== cleAffichee) {
+    main.dataset.cle = cleAffichee;
+    message("Chargement…");
+    silencieux = false;
+  }
   const monJeton = jeton;
   let data;
   try {
     data = await charger(`${API}/v2/sports/${ligue.chemin}/standings`);
   } catch (e) {
     if (monJeton !== jeton) return;
+    if (silencieux) return; // on garde le classement déjà affiché
     message("Impossible de charger le classement.<br>Vérifie ta connexion internet.", true);
     return;
   }
